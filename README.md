@@ -4,7 +4,7 @@ Functions to interact with VSTS
 
 Notes:
 
-After importing module, call the Add-VstsTeamAccount to store variable needed for invoking VSTS api.
+After importing module, call Add-VstsTeamAccount to store variables needed for invoking VSTS api.
 
 06/07/2018
 * Add-VstsTeamAccount
