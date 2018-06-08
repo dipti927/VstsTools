@@ -34,7 +34,7 @@ function Add-VstsAccount {
 	Begin {
 	}
 	Process {
-		# Authorization to usf hii VSTS. $UserName is left blank... Token is Personal Access Token default value. 
+		# Authorization to VSTS. $UserName is left blank... Token is Personal Access Token default value. 
 		$ConvertToBase64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $UserName, $PersonalAccessToken)))
 		try {
 			$AccountProperties = @{
@@ -57,68 +57,131 @@ function Add-VstsAccount {
 	}
 }
 
-function Export-VstsVariableGroup {
-<#
-	.Synopsis
-		Exports library variable groups.
-
-	.Description
-		Exports Library variable groups to json files. Could be used in the pipeline to import the variable groups into a different team project.
-
-		In order to run function, VSTS will need to be authenticated. 
-
-	.PARAMETER AccountName
-		Mandatory AccountName. Name of VSTS account. Example: demo
-
-	.PARAMETER ProjectName
-		Mandatory ProjectName. Name of team project in VSTS.
-
-	.PARAMETER VariableGroupName 
-		Name of library variable group in VSTS.
+function Get-VstsVariableGroup {
+	<#
+		.Synopsis
+			Gets library variable groups.
 	
-	.PARAMETER Path
-		File path to export the variable group(s) to json files.
+		.Description
+			Gets one or more library variable groups.
+	
+			In order to run function, VSTS will need to be authenticated. 
+	
+		.PARAMETER ProjectName
+			Mandatory ProjectName. Name of team project in VSTS.
+	
+		.PARAMETER VariableGroupName 
+			Name of library variable group in VSTS.
+			
+		.Example
+			Example 1: Get all library variable groups
+	
+			Get-VstsVariableGroup -ProjectName Project1
+	
+			Example 2: Get one variable group
+	
+			Get-VstsVariableGroup -ProjectName Project1 -VariableGroupName Project1-Dev
+	
+			Example 3: Get multiple variable groups
+	
+			Get-VstsVariableGroup -ProjectName Project1 -VariableGroupName Project1-Dev, Project1-Production
+	
+	#>
+		[CmdletBinding()]
+		param
+		(
+			[Parameter(Mandatory = $true,
+					   ValueFromPipeline = $true,
+					   Position = 0)]
+			[string]$ProjectName,
+			[Parameter(Mandatory = $false,
+					   ValueFromPipeline=$true,
+					   Position = 1)]
+			[string[]]$VariableGroupName
+		)
+	
+		Begin {
+		}
+		Process {
+			try {
+				$Params = @{
+					Uri = "$($vsts_Account)/$ProjectName/_apis/distributedtask/variablegroups"
+					Headers = $vsts_Headers
+					Method = 'Get'
+					ErrorAction = 'Stop'
+				}
+				$Response = (Invoke-RestMethod @Params).Value
+				if ($VariableGroupName) {
+					$Response = foreach ($Name in $VariableGroupName) {
+						$Response |Where-Object name -eq $Name
+					}
+				}
+			}
+			catch {
+				throw $_
+			}
+		}
+		End {
+			$Response
+		}
+	}
+function Export-VstsVariableGroup {
+	<#
+		.Synopsis
+			Exports library variable groups.
+	
+		.Description
+			Exports Library variable groups to json files. Could be used in the pipeline to import the variable groups into a different team project.
+	
+			In order to run function, VSTS will need to be authenticated. 
+	
+		.PARAMETER ProjectName
+			Mandatory ProjectName. Name of team project in VSTS.
+	
+		.PARAMETER VariableGroupName 
+			Name of library variable group in VSTS.
 		
-	.Example
-		Example 1: Get all library variable groups
-
-		$Headers = (Get-VstsAutorization -AccountName demo -Token 4j294429dsqw14425674466f22d43sd323d465tga1a).Headers
-		Export-VstsVariableGroup -AccountName demo -ProjectName Project1
-
-		Example 2: Get one variable group
-
-		$Headers = (Get-VstsAutorization -AccountName demo -Token 4j294429dsqw14425674466f22d43sd323d465tga1a).Headers
-		Export-VstsVariableGroup -AccountName demo -ProjectName Project1 -VariableGroupName Project1-Dev
-
-		Example 3: Get multiple variable groups
-
-		$Headers = (Get-VstsAutorization -AccountName demo -Token 4j294429dsqw14425674466f22d43sd323d465tga1a).Headers
-		Export-VstsVariableGroup -AccountName demo -ProjectName Project1 -VariableGroupName Project1-Dev, Project1-Production
-
-		Example 4: Export one variable group to json file
-
-		$Headers = (Get-VstsAutorization -AccountName demo -Token 4j294429dsqw14425674466f22d43sd323d465tga1a).Headers
-		Export-VstsVariableGroup -AccountName demo -ProjectName Project1 -VariableGroupName Project1-Dev -Path C:\temp
-
-		Example 5: Export multiple variable groups to json files
-
-		$Headers = (Get-VstsAutorization -AccountName demo -Token 4j294429dsqw14425674466f22d43sd323d465tga1a).Headers
-		Export-VstsVariableGroup -AccountName demo -ProjectName Project1 -VariableGroupName Project1-Dev, Project1-Production -Path C:\temp
-
-#>
+		.PARAMETER Path
+			File path to export the variable group(s) to json files.
+			
+		.Example
+			Example 1: Get all library variable groups
+	
+			Export-VstsVariableGroup -ProjectName Project1
+	
+			Example 2: Get one variable group
+	
+			Export-VstsVariableGroup -ProjectName Project1 -VariableGroupName Project1-Dev
+	
+			Example 3: Get multiple variable groups
+	
+			Export-VstsVariableGroup -ProjectName Project1 -VariableGroupName Project1-Dev, Project1-Production
+	
+			Example 4: Export one variable group to json file
+	
+			Export-VstsVariableGroup -ProjectName Project1 -VariableGroupName Project1-Dev -Path C:\temp
+	
+			Example 5: Export multiple variable groups to json files
+	
+			Export-VstsVariableGroup -ProjectName Project1 -VariableGroupName Project1-Dev, Project1-Production -Path C:\temp
+	
+	#>
 	[CmdletBinding()]
 	param
 	(
 		[Parameter(Mandatory = $true,
-				   ValueFromPipeline = $true,
-				   Position = 1)]
+				ValueFromPipeline = $true,
+				Position = 0)]
 		[string]$ProjectName,
+		[Parameter(ValueFromPipeline = $True,
+				   Position = 1)]
+		[object]$InputObject,
 		[Parameter(Mandatory = $false,
-				   ValueFromPipeline=$true,
-				   Position = 2)]
+				ValueFromPipeline=$true,
+				Position = 2)]
 		[string[]]$VariableGroupName,
 		[Parameter(Mandatory = $false,
-				   Position = 3)]
+				Position = 3)]
 		[string]$Path
 	)
 
@@ -126,17 +189,29 @@ function Export-VstsVariableGroup {
 	}
 	Process {
 		try {
-			$Params = @{
-				Uri = "$($vsts_Account)/$ProjectName/_apis/distributedtask/variablegroups"
-				Headers = $vsts_Headers
-				Method = 'Get'
-				ErrorAction = 'Stop'
-			}
-			$Response = (Invoke-RestMethod @Params).Value
-			if ($VariableGroupName) {
-				$Response = foreach ($Name in $VariableGroupName) {
-					$Response |Where-Object name -eq $Name
+			if (!($InputObject)) {
+				$Params = @{
+					Uri = "$($vsts_Account)/$ProjectName/_apis/distributedtask/variablegroups"
+					Headers = $vsts_Headers
+					Method = 'Get'
+					ErrorAction = 'Stop'
 				}
+				$Response = (Invoke-RestMethod @Params).Value
+				if ($VariableGroupName) {
+					$Response = foreach ($Name in $VariableGroupName) {
+						$Response |Where-Object name -eq $Name
+					}
+				}
+			}
+			else {
+				$Response = $InputObject
+			}
+			foreach ($Group in $Response) {
+				$ConvertVariableGroup = $Group |ConvertTo-Json -Depth 4
+				if ($Path) {
+					$ConvertVariableGroup |Out-File "$($Path)\$($Group.name).json"
+				}
+				$ConvertVariableGroup
 			}
 		}
 		catch {
@@ -144,13 +219,6 @@ function Export-VstsVariableGroup {
 		}
 	}
 	End {
-		foreach ($Group in $Response) {
-			$ConvertVariableGroup = $Group |ConvertTo-Json -Depth 4
-			if ($Path) {
-				$ConvertVariableGroup |Out-File "$($Path)\$($Group.name).json"
-			}
-			$ConvertVariableGroup
-		}
 	}
 }
 
@@ -164,9 +232,6 @@ function Import-VstsVariableGroup {
 
 		In order to run function, VSTS will need to be authenticated. 
 
-	.PARAMETER AccountName
-		Mandatory AccountName. Name of VSTS account. Example: demo
-
 	.PARAMETER ProjectName
 		Mandatory ProjectName. Name of team project in VSTS.
 
@@ -178,67 +243,80 @@ function Import-VstsVariableGroup {
 	.Example
 		Example 1: Import all variable groups
 
-		$Headers = (Get-VstsAutorization -AccountName demo -Token 4j294429dsqw14425674466f22d43sd323d465tga1a).Headers
-		Export-VstsVariableGroup -AccountName demo -ProjectName Project1 |Import-VstsVariableGroup
+		Export-VstsVariableGroup -ProjectName Project1 |Import-VstsVariableGroup
 
 		Example 2: Import one variable group
 
-		$Headers = (Get-VstsAutorization -AccountName demo -Token 4j294429dsqw14425674466f22d43sd323d465tga1a).Headers
-		Export-VstsVariableGroup -AccountName demo -ProjectName Project1 -VariableGroupName Project1-Dev -Headers $Headers |Import-VstsVariableGroup
+		Export-VstsVariableGroup -ProjectName Project1 -VariableGroupName Project1-Dev -Headers $Headers |Import-VstsVariableGroup
 
 		Example 3: Import variable group from json file.
 
-		$Headers = (Get-VstsAutorization -AccountName demo -Token 4j294429dsqw14425674466f22d43sd323d465tga1a).Headers
-		Import-VstsVariableGroup -AccountName demo -ProjectName Project1 -Path C:\temp\project1-dev.json -Headers $Headers
+		Import-VstsVariableGroup -ProjectName Project1 -Path C:\temp\project1-dev.json -Headers $Headers
 
 		Example 5: Import multiple variable groups from json files
 
-		$Headers = (Get-VstsAutorization -AccountName demo -Token 4j294429dsqw14425674466f22d43sd323d465tga1a).Headers
-		Import-VstsVariableGroup -AccountName demo -ProjectName Project1 -Path C:\temp\project1-dev.json,C:\temp\project1-production.json -Headers $Headers
+		Import-VstsVariableGroup -ProjectName Project1 -Path C:\temp\project1-dev.json,C:\temp\project1-production.json -Headers $Headers
 
 #>
 	[CmdletBinding()]
 	param
 	(
 		[Parameter(Mandatory = $true,
-				   ValueFromPipeline = $true,
-				   Position = 2)]
+					ValueFromPipeline = $true,
+					Position = 2)]
 		[string]$ProjectName,
 		[Parameter(ValueFromPipeline = $True,
-				   Position = 3)]
-        [object]$InputObject,
+					Position = 3)]
+		[object]$InputObject,
 		[Parameter(Mandatory = $false,
-				   ValueFromPipeline = $false,
-				   Position = 4)]
-		[string[]]$Path
+					ValueFromPipeline = $false,
+					Position = 4)]
+		[string[]]$Path,
+		[Parameter(Mandatory = $false,
+					ValueFromPipeline = $false,
+					Position = 5)]
+		[switch]$Update
 	)
 
 	Begin {
 	}
 	Process {
+		$Params = @{
+			Headers = $vsts_headers
+			ContentType = 'application/json'
+			Uri = "$($vsts_Account)/$ProjectName/_apis/distributedtask/variablegroups?api-version=4.1-preview.1"
+			Method = 'Post'
+		}
 		if ($Path) {
 			foreach ($File in $Path) {
-				$Params = @{
-					Uri = "$($vsts_Account)/$ProjectName/_apis/distributedtask/variablegroups?api-version=4.1-preview.1"
-					Headers = $vsts_Headers
-					ContentType = 'application/json'
-					Method = 'Post'
+				if ($Update) {
+					$Json = Get-Content -Path $File
+					$ConvertJson = $Json |ConvertFrom-Json
+					$VariableGroupName = $ConvertJson.name
+					$GetVariableGroup = Get-VstsVariableGroup -ProjectName $ProjectName -VariableGroupName $VariableGroupName
+					$Id = $GetVariableGroup.Id
+					@($Params.GetEnumerator()) |Where-Object -FilterScript {$_.Key -eq 'Uri'} |
+					ForEach-Object {$Params[$_.Key] = "$vsts_Account/$ProjectName/_apis/distributedtask/variablegroups/$($Id)?api-version=4.1-preview.1"}
+					@($Params.GetEnumerator()) |Where-Object -FilterScript {$_.Key -eq 'Method'} |
+					ForEach-Object {$Params[$_.Key] = 'Put'}
 				}
-				$Json = Get-Content -Path $File
 				$Params.Add('Body', $Json)
 				Invoke-RestMethod @Params
+				$Params.Remove('Body')
 			}
 		}
 		else {
-			$Params = @{
-				Uri = "$($vsts_Account)/$ProjectName/_apis/distributedtask/variablegroups?api-version=4.1-preview.1"
-				Headers = $vsts_headers
-				ContentType = 'application/json'
-				Method = 'Post'
+			if ($Update) {
+				$ConvertJson = $InputObject |ConvertFrom-Json
+				$VariableGroupName = $ConvertJson.name
+				$GetVariableGroup = Get-VstsVariableGroup -ProjectName $ProjectName -VariableGroupName $VariableGroupName
+				$Id = $GetVariableGroup.Id
+				@($Params.GetEnumerator()) |Where-Object -FilterScript {$_.Key -eq 'Uri'} |
+				ForEach-Object {$Params[$_.Key] = "$vsts_Account/$ProjectName/_apis/distributedtask/variablegroups/$($Id)?api-version=4.1-preview.1"}
+				@($Params.GetEnumerator()) |Where-Object -FilterScript {$_.Key -eq 'Method'} |
+				ForEach-Object {$Params[$_.Key] = 'Put'}
 			}
-			if ($InputObject) {
-				$Params.Add('Body', $InputObject)
-			}
+			$Params.Add('Body', $InputObject)
 			Invoke-RestMethod @Params
 		}
 	}
