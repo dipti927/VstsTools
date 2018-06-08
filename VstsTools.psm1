@@ -53,7 +53,7 @@ function Add-VstsAccount {
 		}
 	}
 	End {
-		return "Connected to $ENV:vsts_Account"
+		return "Connected to $vsts_Account"
 	}
 }
 
@@ -127,7 +127,7 @@ function Export-VstsVariableGroup {
 	Process {
 		try {
 			$Params = @{
-				Uri = "$($ENV:vsts_Account)/$ProjectName/_apis/distributedtask/variablegroups"
+				Uri = "$($vsts_Account)/$ProjectName/_apis/distributedtask/variablegroups"
 				Headers = $vsts_Headers
 				Method = 'Get'
 				ErrorAction = 'Stop'
