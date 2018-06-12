@@ -116,13 +116,13 @@ function Get-VstsVariableGroup {
 						$Response |Where-Object name -eq $Name
 					}
 				}
+				$Response
 			}
 			catch {
 				throw $_
 			}
 		}
 		End {
-			$Response
 		}
 	}
 function Export-VstsVariableGroup {
@@ -177,10 +177,11 @@ function Export-VstsVariableGroup {
 				   Position = 1)]
 		[object]$InputObject,
 		[Parameter(Mandatory = $false,
-				ValueFromPipeline=$true,
+				ValueFromPipeline = $true,
 				Position = 2)]
 		[string[]]$VariableGroupName,
 		[Parameter(Mandatory = $false,
+				   ValueFromPipeline = $false,
 				Position = 3)]
 		[string]$Path
 	)
@@ -190,29 +191,25 @@ function Export-VstsVariableGroup {
 	Process {
 		try {
 			if (!($InputObject)) {
-				$Params = @{
-					Uri = "$($vsts_Account)/$ProjectName/_apis/distributedtask/variablegroups"
-					Headers = $vsts_Headers
-					Method = 'Get'
-					ErrorAction = 'Stop'
-				}
-				$Response = (Invoke-RestMethod @Params).Value
+				$Response = Get-VstsVariableGroup -ProjectName $ProjectName
 				if ($VariableGroupName) {
 					$Response = foreach ($Name in $VariableGroupName) {
-						$Response |Where-Object name -eq $Name
+						$Response |Where-Object -Property name -eq $Name
 					}
 				}
 			}
 			else {
 				$Response = $InputObject
 			}
-			foreach ($Group in $Response) {
-				$ConvertVariableGroup = $Group |ConvertTo-Json -Depth 4
+			$Response = foreach ($VariableGroup in $Response) {
+				$ConvertToJson = $VariableGroup |ConvertTo-Json -Depth 4
 				if ($Path) {
-					$ConvertVariableGroup |Out-File "$($Path)\$($Group.name).json"
+					$Export = Join-Path -Path $Path -ChildPath "$($VariableGroup.name).json"
+					$ConvertToJson |Out-File $Export
 				}
-				$ConvertVariableGroup
+				$ConvertToJson
 			}
+			$Response
 		}
 		catch {
 			throw $_
@@ -247,15 +244,15 @@ function Import-VstsVariableGroup {
 
 		Example 2: Import one variable group
 
-		Export-VstsVariableGroup -ProjectName Project1 -VariableGroupName Project1-Dev -Headers $Headers |Import-VstsVariableGroup
+		Export-VstsVariableGroup -ProjectName Project1 -VariableGroupName Project1-Dev |Import-VstsVariableGroup
 
 		Example 3: Import variable group from json file.
 
-		Import-VstsVariableGroup -ProjectName Project1 -Path C:\temp\project1-dev.json -Headers $Headers
+		Import-VstsVariableGroup -ProjectName Project1 -Path C:\temp\project1-dev.json
 
 		Example 5: Import multiple variable groups from json files
 
-		Import-VstsVariableGroup -ProjectName Project1 -Path C:\temp\project1-dev.json,C:\temp\project1-production.json -Headers $Headers
+		Import-VstsVariableGroup -ProjectName Project1 -Path C:\temp\project1-dev.json,C:\temp\project1-production.json
 
 #>
 	[CmdletBinding()]
@@ -263,18 +260,18 @@ function Import-VstsVariableGroup {
 	(
 		[Parameter(Mandatory = $true,
 					ValueFromPipeline = $true,
-					Position = 2)]
+					Position = 0)]
 		[string]$ProjectName,
 		[Parameter(ValueFromPipeline = $True,
-					Position = 3)]
+					Position = 1)]
 		[object]$InputObject,
 		[Parameter(Mandatory = $false,
 					ValueFromPipeline = $false,
-					Position = 4)]
+					Position = 2)]
 		[string[]]$Path,
 		[Parameter(Mandatory = $false,
 					ValueFromPipeline = $false,
-					Position = 5)]
+					Position = 4)]
 		[switch]$Update
 	)
 
@@ -286,15 +283,22 @@ function Import-VstsVariableGroup {
 			ContentType = 'application/json'
 			Uri = "$($vsts_Account)/$ProjectName/_apis/distributedtask/variablegroups?api-version=4.1-preview.1"
 			Method = 'Post'
+			ErrorAction = 'Continue'
 		}
 		if ($Path) {
 			foreach ($File in $Path) {
+				$Params = @{
+					Headers = $vsts_headers
+					ContentType = 'application/json'
+					Uri = "$($vsts_Account)/$ProjectName/_apis/distributedtask/variablegroups?api-version=4.1-preview.1"
+					Method = 'Post'
+				}
+				$Json = Get-Content -Path $File
+				$ConvertJson = $Json |ConvertFrom-Json
+				$VariableGroupName = $ConvertJson.name
+				$GetVariableGroup = Get-VstsVariableGroup -ProjectName $ProjectName -VariableGroupName $VariableGroupName
+				$Id = $GetVariableGroup.Id
 				if ($Update) {
-					$Json = Get-Content -Path $File
-					$ConvertJson = $Json |ConvertFrom-Json
-					$VariableGroupName = $ConvertJson.name
-					$GetVariableGroup = Get-VstsVariableGroup -ProjectName $ProjectName -VariableGroupName $VariableGroupName
-					$Id = $GetVariableGroup.Id
 					@($Params.GetEnumerator()) |Where-Object -FilterScript {$_.Key -eq 'Uri'} |
 					ForEach-Object {$Params[$_.Key] = "$vsts_Account/$ProjectName/_apis/distributedtask/variablegroups/$($Id)?api-version=4.1-preview.1"}
 					@($Params.GetEnumerator()) |Where-Object -FilterScript {$_.Key -eq 'Method'} |
@@ -302,24 +306,24 @@ function Import-VstsVariableGroup {
 				}
 				$Params.Add('Body', $Json)
 				Invoke-RestMethod @Params
-				$Params.Remove('Body')
 			}
 		}
 		else {
-			if ($Update) {
-				$ConvertJson = $InputObject |ConvertFrom-Json
-				$VariableGroupName = $ConvertJson.name
+				$ConvertFromJson = $InputObject |ConvertFrom-Json
+				$VariableGroupName = $ConvertFromJson.name
 				$GetVariableGroup = Get-VstsVariableGroup -ProjectName $ProjectName -VariableGroupName $VariableGroupName
 				$Id = $GetVariableGroup.Id
-				@($Params.GetEnumerator()) |Where-Object -FilterScript {$_.Key -eq 'Uri'} |
-				ForEach-Object {$Params[$_.Key] = "$vsts_Account/$ProjectName/_apis/distributedtask/variablegroups/$($Id)?api-version=4.1-preview.1"}
-				@($Params.GetEnumerator()) |Where-Object -FilterScript {$_.Key -eq 'Method'} |
-				ForEach-Object {$Params[$_.Key] = 'Put'}
-			}
-			$Params.Add('Body', $InputObject)
-			Invoke-RestMethod @Params
+				if ($Update) {
+					@($Params.GetEnumerator()) |Where-Object -FilterScript {$_.Key -eq 'Uri'} |
+					ForEach-Object {$Params[$_.Key] = "$vsts_Account/$ProjectName/_apis/distributedtask/variablegroups/$($Id)?api-version=4.1-preview.1"}
+					@($Params.GetEnumerator()) |Where-Object -FilterScript {$_.Key -eq 'Method'} |
+					ForEach-Object {$Params[$_.Key] = 'Put'}
+				}
+				$Params.Add('Body', $InputObject)
+				Invoke-RestMethod @Params
 		}
 	}
 	End {
+		
 	}
 }
